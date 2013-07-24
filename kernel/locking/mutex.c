@@ -447,7 +447,8 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 
 			mutex_set_owner(lock);
 			mcs_spin_unlock(&lock->mcs_lock, &node);
-			goto done;
+			preempt_enable();
+			return 0;
 		}
 		mcs_spin_unlock(&lock->mcs_lock, &node);
 
@@ -565,7 +566,6 @@ skip_wait:
 	}
 
 	spin_unlock_mutex(&lock->wait_lock, flags);
-done:
 	preempt_enable();
 	return 0;
 
