@@ -1613,8 +1613,10 @@ static void switched_from_dl(struct rq *rq, struct task_struct *p)
 	 * this is the right place to try to pull some other one
 	 * from an overloaded cpu, if any.
 	 */
-	if (!rq->dl.dl_nr_running)
-		queue_pull_task(rq);
+	if (!p->on_rq || rq->dl.dl_nr_running)
+		return;
+
+	queue_pull_task(rq);
 #endif
 }
 
