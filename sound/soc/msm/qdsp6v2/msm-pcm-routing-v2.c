@@ -954,7 +954,7 @@ void msm_pcm_routing_dereg_phy_stream(int fedai_id, int stream_type)
 								__func__);
 				continue;
 			}
-			topology = adm_get_topology_for_port_from_copp_id(
+			topology = adm_get_topology_for_port_copp_idx(
 					msm_bedais[i].port_id, idx);
 			/*adm fails to get topology id during ssr. Fallback
 			to msm_routing_get_adm_topology in that case */
@@ -6516,7 +6516,7 @@ static int msm_routing_put_device_pp_params_mixer(struct snd_kcontrol *kcontrol,
 			if (!test_bit(idx, &copp))
 				continue;
 			topo_id = adm_get_topology_for_port_copp_idx(port_id,
-								     copp);
+								     idx);
 			if (topo_id != COMPRESSED_PASSTHROUGH_DEFAULT_TOPOLOGY)
 				continue;
 		pr_debug("%s: port: 0x%x, copp %ld, be active: %d, passt: %d\n",
