@@ -1381,7 +1381,9 @@ static struct rq *find_lock_later_rq(struct task_struct *task, struct rq *rq)
 			if (unlikely(task_rq(task) != rq ||
 				     !cpumask_test_cpu(later_rq->cpu,
 				                       &task->cpus_allowed) ||
-				     task_running(rq, task) || !task->on_rq)) {
+				     task_running(rq, task) ||
+				     !dl_task(task) ||
+				     !task->on_rq)) {
 				double_unlock_balance(rq, later_rq);
 				later_rq = NULL;
 				break;
