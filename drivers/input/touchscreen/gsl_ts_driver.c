@@ -79,6 +79,10 @@ static volatile unsigned int gsl_gesture_flag = 0;
 static char gsl_gesture_c = 0;
 static bool dozing = false;
 struct timeval startup;
+static atomic_t double_tap_enable;
+static atomic_t camera_enable;
+static atomic_t music_enable;
+static atomic_t flashlight_enable;
 #endif
 struct timer_list startup_timer;
 static bool timer_expired = false;
@@ -1450,6 +1454,22 @@ static void gsl_quit_doze(struct gsl_ts_data *ts)
 	dev_dbg(&ts->client->dev, "exiting doze mode\n");
 }
 
+static void gsl_set_new_gesture_flag(void)
+{
+	uint8_t flag;
+
+	if (atomic_read(&music_enable) == 0 &&
+			atomic_read(&camera_enable) == 0 &&
+			atomic_read(&flashlight_enable) == 0)
+		flag = atomic_read(&double_tap_enable) == 1 ? 1 : 0;
+	else
+		flag = 2;
+
+	mutex_lock(&ddata->hw_lock);
+	gsl_gesture_flag = flag;
+	mutex_unlock(&ddata->hw_lock);
+}
+
 static ssize_t gsl_sysfs_tpgesture_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -1472,6 +1492,82 @@ static ssize_t gsl_sysfs_tpgesturet_store(struct device *dev,
 	return count;
 }
 static DEVICE_ATTR(gesture, 0664, gsl_sysfs_tpgesture_show, gsl_sysfs_tpgesturet_store);
+
+static ssize_t gsl_sysfs_camera_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&camera_enable));
+}
+
+static ssize_t gsl_sysfs_camera_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	atomic_set(&camera_enable, buf[0] == '1' ? 1 : 0);
+
+	return count;
+}
+
+static DEVICE_ATTR(camera_enable,
+		0664,
+		gsl_sysfs_camera_show,
+		gsl_sysfs_camera_store);
+
+static ssize_t gsl_sysfs_flashlight_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&flashlight_enable));
+}
+
+static ssize_t gsl_sysfs_flashlight_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	atomic_set(&flashlight_enable, buf[0] == '1' ? 1 : 0);
+
+	return count;
+}
+
+static DEVICE_ATTR(flashlight_enable,
+		0664,
+		gsl_sysfs_flashlight_show,
+		gsl_sysfs_flashlight_store);
+
+static ssize_t gsl_sysfs_music_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&music_enable));
+}
+
+static ssize_t gsl_sysfs_music_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	atomic_set(&music_enable, buf[0] == '1' ? 1 : 0);
+
+	return count;
+}
+
+static DEVICE_ATTR(music_enable,
+		0664,
+		gsl_sysfs_music_show,
+		gsl_sysfs_music_store);
+
+static ssize_t gsl_sysfs_double_tap_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&double_tap_enable));
+}
+
+static ssize_t gsl_sysfs_double_tap_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	atomic_set(&double_tap_enable, buf[0] == '1' ? 1 : 0);
+
+	return count;
+}
+
+static DEVICE_ATTR(double_tap_enable,
+		0664,
+		gsl_sysfs_double_tap_show,
+		gsl_sysfs_double_tap_store);
 #endif
 
 static struct attribute *gsl_attrs[] = {
@@ -1480,6 +1576,10 @@ static struct attribute *gsl_attrs[] = {
 		
 #ifdef GSL_GESTURE
 	&dev_attr_gesture.attr,
+	&dev_attr_double_tap_enable.attr,
+	&dev_attr_music_enable.attr,
+	&dev_attr_camera_enable.attr,
+	&dev_attr_flashlight_enable.attr,
 #endif
 
 #ifdef GSL_PROXIMITY_SENSOR
@@ -1727,7 +1827,8 @@ static irqreturn_t gsl_ts_isr(int irq, void *priv)
 			print_info("gsl_obtain_gesture():tmp_c=0x%x\n",tmp_c);
 			switch(tmp_c){
 			case (int)'C':
-				key_data = KEY_GESTURE_SLIDE_C;
+				if (atomic_read(&camera_enable))
+					key_data = KEY_GESTURE_SLIDE_C;
 				break;
 			case (int)'E':
 				key_data = KEY_E;
@@ -1736,7 +1837,8 @@ static irqreturn_t gsl_ts_isr(int irq, void *priv)
 				key_data = KEY_W;
 				break;
 			case (int)'O':
-				key_data = KEY_GESTURE_SLIDE_O;
+				if (atomic_read(&flashlight_enable))
+					key_data = KEY_GESTURE_SLIDE_O;
 				break;
 			case (int)'M':
 				key_data = KEY_M;
@@ -1751,19 +1853,23 @@ static irqreturn_t gsl_ts_isr(int irq, void *priv)
 				key_data = KEY_S;
 				break;
 			case (int)'*':	
-				key_data = KEY_WAKEUP;
+				if (atomic_read(&double_tap_enable))
+					key_data = KEY_WAKEUP;
 				break;/* double click */
 				case (int)0xa1fa:
-				key_data = KEY_GESTURE_SLIDE_RIGHT;
+				if (atomic_read(&music_enable))
+					key_data = KEY_GESTURE_SLIDE_RIGHT;
 				break;/* right */
 			case (int)0xa1fd:
-				key_data = KEY_GESTURE_SLIDE_DOWN;
+				if (atomic_read(&music_enable))
+					key_data = KEY_GESTURE_SLIDE_DOWN;
 				break;/* down */
 			case (int)0xa1fc:	
 				key_data = KEY_F3;
 				break;/* up */
 			case (int)0xa1fb:	/* left */
-				key_data = KEY_GESTURE_SLIDE_LEFT;
+				if (atomic_read(&music_enable))
+					key_data = KEY_GESTURE_SLIDE_LEFT;
 				break;	
 			
 			}
@@ -2287,6 +2393,11 @@ static int gsl_ts_probe(struct i2c_client *client, const struct i2c_device_id *i
 		input_set_capability(ddata->idev, EV_KEY, KEY_GESTURE_SLIDE_DOWN);
 		input_set_capability(ddata->idev, EV_KEY, KEY_GESTURE_SLIDE_LEFT);
 		input_set_capability(ddata->idev, EV_KEY, KEY_GESTURE_SLIDE_RIGHT);
+
+		atomic_set(&double_tap_enable, 0);
+		atomic_set(&music_enable, 0);
+		atomic_set(&camera_enable, 0);
+		atomic_set(&flashlight_enable, 0);
 #endif
 
 #ifdef GSL_PROXIMITY_SENSOR
@@ -2351,6 +2462,7 @@ static int gsl_ts_probe(struct i2c_client *client, const struct i2c_device_id *i
 	}
 
 #ifdef GSL_GESTURE
+	gsl_set_new_gesture_flag();
 	if (gsl_gesture_flag)
 		enable_irq_wake(client->irq);
 #endif
@@ -2432,6 +2544,7 @@ static int gsl_ts_pm_suspend(struct device *dev)
 	disable_irq(ddata->client->irq);
 
 #ifdef GSL_GESTURE
+	gsl_set_new_gesture_flag();
 	if (gsl_gesture_flag) {
 		dev_dbg(dev, "suspend: wake up enabled\n");
 		enable_irq_wake(ddata->client->irq);
@@ -2450,8 +2563,10 @@ static int gsl_ts_pm_resume(struct device *dev)
 	struct gsl_ts_data *ddata = dev_get_drvdata(dev);
 
 #ifdef GSL_GESTURE
-	if (gsl_gesture_flag)
+	if (gsl_gesture_flag) {
 		disable_irq_wake(ddata->client->irq);
+		gsl_set_new_gesture_flag();
+	}
 #endif
 
 	enable_irq(ddata->client->irq);
