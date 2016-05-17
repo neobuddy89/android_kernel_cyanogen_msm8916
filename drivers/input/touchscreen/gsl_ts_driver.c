@@ -131,6 +131,8 @@ static void gsl_sw_init(struct i2c_client *client);
 
 #if defined(CONFIG_FB)
 static int fb_notifier_callback(struct notifier_block *self,unsigned long event, void *data);
+static void gsl_ts_suspend(void);
+static void gsl_ts_resume(void);
 #endif
 
 #ifdef GSL_GESTURE
@@ -1503,6 +1505,7 @@ static ssize_t gsl_sysfs_camera_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
 	atomic_set(&camera_enable, buf[0] == '1' ? 1 : 0);
+	gsl_set_new_gesture_flag();
 
 	return count;
 }
@@ -1522,6 +1525,7 @@ static ssize_t gsl_sysfs_flashlight_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
 	atomic_set(&flashlight_enable, buf[0] == '1' ? 1 : 0);
+	gsl_set_new_gesture_flag();
 
 	return count;
 }
@@ -1541,6 +1545,7 @@ static ssize_t gsl_sysfs_music_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
 	atomic_set(&music_enable, buf[0] == '1' ? 1 : 0);
+	gsl_set_new_gesture_flag();
 
 	return count;
 }
@@ -1560,6 +1565,7 @@ static ssize_t gsl_sysfs_double_tap_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
 	atomic_set(&double_tap_enable, buf[0] == '1' ? 1 : 0);
+	gsl_set_new_gesture_flag();
 
 	return count;
 }
@@ -1717,8 +1723,11 @@ static irqreturn_t gsl_ts_isr(int irq, void *priv)
 	struct i2c_client *client = ddata->client;
 	struct input_dev *idev = ddata->idev;
 	
-	#if defined(GSL_GESTURE)&&defined(GSL_DEBUG)
+	#if defined(GSL_GESTURE)
+	bool required_suspend = false;
+	#if defined(GSL_DEBUG)
 	unsigned int test_count = 0;
+	#endif
 	#endif
 
 	#ifdef GSL_PROXIMITY_SENSOR
@@ -1837,8 +1846,10 @@ static irqreturn_t gsl_ts_isr(int irq, void *priv)
 				key_data = KEY_W;
 				break;
 			case (int)'O':
-				if (atomic_read(&flashlight_enable))
+				if (atomic_read(&flashlight_enable)) {
 					key_data = KEY_GESTURE_SLIDE_O;
+					required_suspend = true;
+				}
 				break;
 			case (int)'M':
 				key_data = KEY_M;
@@ -1856,20 +1867,26 @@ static irqreturn_t gsl_ts_isr(int irq, void *priv)
 				if (atomic_read(&double_tap_enable))
 					key_data = KEY_WAKEUP;
 				break;/* double click */
-				case (int)0xa1fa:
-				if (atomic_read(&music_enable))
+			case (int)0xa1fa:
+				if (atomic_read(&music_enable)) {
 					key_data = KEY_GESTURE_SLIDE_RIGHT;
+					required_suspend = true;
+				}
 				break;/* right */
 			case (int)0xa1fd:
-				if (atomic_read(&music_enable))
+				if (atomic_read(&music_enable)) {
 					key_data = KEY_GESTURE_SLIDE_DOWN;
+					required_suspend = true;
+				}
 				break;/* down */
 			case (int)0xa1fc:	
 				key_data = KEY_F3;
 				break;/* up */
 			case (int)0xa1fb:	/* left */
-				if (atomic_read(&music_enable))
+				if (atomic_read(&music_enable)) {
 					key_data = KEY_GESTURE_SLIDE_LEFT;
+					required_suspend = true;
+				}
 				break;	
 			
 			}
@@ -1891,7 +1908,13 @@ static irqreturn_t gsl_ts_isr(int irq, void *priv)
 				input_report_key(idev, key_data, 0);
 				input_sync(idev);
 			}
-			goto schedule;
+
+			mutex_unlock(&ddata->hw_lock);
+
+			if (required_suspend)
+				gsl_ts_suspend();
+
+			goto i2c_lock_schedule;
 		}
 #endif
 
@@ -2563,10 +2586,8 @@ static int gsl_ts_pm_resume(struct device *dev)
 	struct gsl_ts_data *ddata = dev_get_drvdata(dev);
 
 #ifdef GSL_GESTURE
-	if (gsl_gesture_flag) {
+	if (gsl_gesture_flag)
 		disable_irq_wake(ddata->client->irq);
-		gsl_set_new_gesture_flag();
-	}
 #endif
 
 	enable_irq(ddata->client->irq);
