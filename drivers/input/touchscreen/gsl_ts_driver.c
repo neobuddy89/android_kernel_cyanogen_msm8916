@@ -1388,8 +1388,8 @@ static void gsl_enter_doze(struct gsl_ts_data *ts, bool bCharacterGesture)
 	gsl_load_fw(ts->client,GSLX68X_FW_GESTURE,temp);
 	gsl_start_core(ts->client);
 	msleep(1000);		
-#endif
 	WARN_ON(dozing);
+#endif
 	dozing = true;
 
 	buf[0] = 0xa;
@@ -1417,7 +1417,7 @@ static void gsl_quit_doze(struct gsl_ts_data *ts)
 	u8 buf[4] = {0};
 	//u32 tmp;
 
-	WARN_ON(!dozing);
+	//WARN_ON(!dozing);
 
 	/* disable the IRQ while we go reset the peripheral */
 	disable_irq(ts->client->irq);
@@ -2135,7 +2135,7 @@ static void gsl_ts_resume(void)
 
 	/*Gesture Resume*/
 	#ifdef GSL_GESTURE
-		WARN_ON(!dozing);
+		//WARN_ON(!dozing);
 		gsl_quit_doze(ddata);
 	#else
 		gsl_power_on(client, true);
