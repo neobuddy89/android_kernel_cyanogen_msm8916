@@ -1771,7 +1771,7 @@ static irqreturn_t gsl_ts_isr(int irq, void *priv)
 	struct input_dev *idev = ddata->idev;
 	
 	#if defined(GSL_GESTURE)
-	bool required_suspend = false;
+	bool required_doze = false;
 	#if defined(GSL_DEBUG)
 	unsigned int test_count = 0;
 	#endif
@@ -1896,7 +1896,7 @@ static irqreturn_t gsl_ts_isr(int irq, void *priv)
 			case (int)'O':
 				if (atomic_read(&flashlight_enable)) {
 					key_data = KEY_GESTURE_SLIDE_O;
-					required_suspend = true;
+					required_doze = true;
 				}
 				break;
 			case (int)'M':
@@ -1919,13 +1919,13 @@ static irqreturn_t gsl_ts_isr(int irq, void *priv)
 			case (int)0xa1fa:
 				if (atomic_read(&music_enable)) {
 					key_data = KEY_GESTURE_SLIDE_RIGHT;
-					required_suspend = true;
+					required_doze = true;
 				}
 				break;/* right */
 			case (int)0xa1fd:
 				if (atomic_read(&music_enable)) {
 					key_data = KEY_GESTURE_SLIDE_DOWN;
-					required_suspend = true;
+					required_doze = true;
 				}
 				break;/* down */
 			case (int)0xa1fc:	
@@ -1934,7 +1934,7 @@ static irqreturn_t gsl_ts_isr(int irq, void *priv)
 			case (int)0xa1fb:	/* left */
 				if (atomic_read(&music_enable)) {
 					key_data = KEY_GESTURE_SLIDE_LEFT;
-					required_suspend = true;
+					required_doze = true;
 				}
 				break;	
 			
@@ -1958,12 +1958,11 @@ static irqreturn_t gsl_ts_isr(int irq, void *priv)
 				input_sync(idev);
 			}
 
-			mutex_unlock(&ddata->hw_lock);
+			if (required_doze)
+				gsl_enter_doze(ddata,
+					gsl_gesture_flag == 2);
 
-			if (required_suspend)
-				gsl_ts_suspend();
-
-			goto i2c_lock_schedule;
+			goto schedule;
 		}
 #endif
 
