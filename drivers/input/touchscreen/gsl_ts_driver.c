@@ -85,6 +85,10 @@ static atomic_t music_enable;
 static atomic_t flashlight_enable;
 static atomic_t message_enable;
 static atomic_t email_enable;
+static atomic_t custom_w_enable;
+static atomic_t custom_z_enable;
+static atomic_t custom_v_enable;
+static atomic_t custom_s_enable;
 #endif
 struct timer_list startup_timer;
 static bool timer_expired = false;
@@ -1466,7 +1470,11 @@ static void gsl_set_new_gesture_flag(void)
 			atomic_read(&camera_enable) == 0 &&
 			atomic_read(&flashlight_enable) == 0 &&
 			atomic_read(&message_enable) == 0 &&
-			atomic_read(&email_enable) == 0 )
+			atomic_read(&email_enable) == 0 &&
+			atomic_read(&custom_w_enable) == 0 &&
+			atomic_read(&custom_z_enable) == 0 &&
+			atomic_read(&custom_v_enable) == 0 &&
+			atomic_read(&custom_s_enable) == 0 )
 		flag = atomic_read(&double_tap_enable) == 1 ? 1 : 0;
 	else
 		flag = 2;
@@ -1619,6 +1627,86 @@ static DEVICE_ATTR(email_enable,
 		gsl_sysfs_email_show,
 		gsl_sysfs_email_store);
 
+static ssize_t gsl_sysfs_custom_w_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&custom_w_enable));
+}
+
+static ssize_t gsl_sysfs_custom_w_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	atomic_set(&custom_w_enable, buf[0] == '1' ? 1 : 0);
+	gsl_set_new_gesture_flag();
+
+	return count;
+}
+
+static DEVICE_ATTR(custom_w_enable,
+		0664,
+		gsl_sysfs_custom_w_show,
+		gsl_sysfs_custom_w_store);
+
+static ssize_t gsl_sysfs_custom_z_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&custom_z_enable));
+}
+
+static ssize_t gsl_sysfs_custom_z_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	atomic_set(&custom_z_enable, buf[0] == '1' ? 1 : 0);
+	gsl_set_new_gesture_flag();
+
+	return count;
+}
+
+static DEVICE_ATTR(custom_z_enable,
+		0664,
+		gsl_sysfs_custom_z_show,
+		gsl_sysfs_custom_z_store);
+
+static ssize_t gsl_sysfs_custom_v_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&custom_v_enable));
+}
+
+static ssize_t gsl_sysfs_custom_v_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	atomic_set(&custom_v_enable, buf[0] == '1' ? 1 : 0);
+	gsl_set_new_gesture_flag();
+
+	return count;
+}
+
+static DEVICE_ATTR(custom_v_enable,
+		0664,
+		gsl_sysfs_custom_v_show,
+		gsl_sysfs_custom_v_store);
+
+static ssize_t gsl_sysfs_custom_s_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&custom_s_enable));
+}
+
+static ssize_t gsl_sysfs_custom_s_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	atomic_set(&custom_s_enable, buf[0] == '1' ? 1 : 0);
+	gsl_set_new_gesture_flag();
+
+	return count;
+}
+
+static DEVICE_ATTR(custom_s_enable,
+		0664,
+		gsl_sysfs_custom_s_show,
+		gsl_sysfs_custom_s_store);
+
 #endif
 
 static struct attribute *gsl_attrs[] = {
@@ -1633,6 +1721,10 @@ static struct attribute *gsl_attrs[] = {
 	&dev_attr_flashlight_enable.attr,
 	&dev_attr_message_enable.attr,
 	&dev_attr_email_enable.attr,
+	&dev_attr_custom_w_enable.attr,
+	&dev_attr_custom_z_enable.attr,
+	&dev_attr_custom_v_enable.attr,
+	&dev_attr_custom_s_enable.attr,
 #endif
 
 #ifdef GSL_PROXIMITY_SENSOR
@@ -1891,7 +1983,8 @@ static irqreturn_t gsl_ts_isr(int irq, void *priv)
 					key_data = KEY_GESTURE_SLIDE_E;
 				break;
 			case (int)'W':
-				key_data = KEY_W;
+				if (atomic_read(&custom_w_enable))
+					key_data = KEY_GESTURE_SLIDE_W;
 				break;
 			case (int)'O':
 				if (atomic_read(&flashlight_enable)) {
@@ -1904,13 +1997,16 @@ static irqreturn_t gsl_ts_isr(int irq, void *priv)
 					key_data = KEY_GESTURE_SLIDE_M;
 				break;
 			case (int)'Z':
-				key_data = KEY_Z;
+				if (atomic_read(&custom_z_enable))
+					key_data = KEY_GESTURE_SLIDE_Z;
 				break;
 			case (int)'V':
-				key_data = KEY_V;
+				if (atomic_read(&custom_v_enable))
+					key_data = KEY_GESTURE_SLIDE_V;
 				break;
 			case (int)'S':
-				key_data = KEY_S;
+				if (atomic_read(&custom_s_enable))
+					key_data = KEY_GESTURE_SLIDE_S;
 				break;
 			case (int)'*':	
 				if (atomic_read(&double_tap_enable))
@@ -2456,11 +2552,11 @@ static int gsl_ts_probe(struct i2c_client *client, const struct i2c_device_id *i
 		input_set_capability(ddata->idev, EV_KEY, KEY_GESTURE_SLIDE_C);
 		input_set_capability(ddata->idev, EV_KEY, KEY_GESTURE_SLIDE_E);
 		input_set_capability(ddata->idev, EV_KEY, KEY_GESTURE_SLIDE_O);
-		input_set_capability(ddata->idev, EV_KEY, KEY_W);
+		input_set_capability(ddata->idev, EV_KEY, KEY_GESTURE_SLIDE_W);
 		input_set_capability(ddata->idev, EV_KEY, KEY_GESTURE_SLIDE_M);
-		input_set_capability(ddata->idev, EV_KEY, KEY_Z);
-		input_set_capability(ddata->idev, EV_KEY, KEY_V);
-		input_set_capability(ddata->idev, EV_KEY, KEY_S);
+		input_set_capability(ddata->idev, EV_KEY, KEY_GESTURE_SLIDE_Z);
+		input_set_capability(ddata->idev, EV_KEY, KEY_GESTURE_SLIDE_V);
+		input_set_capability(ddata->idev, EV_KEY, KEY_GESTURE_SLIDE_S);
 		input_set_capability(ddata->idev, EV_KEY, KEY_GESTURE_SLIDE_DOWN);
 		input_set_capability(ddata->idev, EV_KEY, KEY_GESTURE_SLIDE_LEFT);
 		input_set_capability(ddata->idev, EV_KEY, KEY_GESTURE_SLIDE_RIGHT);
@@ -2471,6 +2567,10 @@ static int gsl_ts_probe(struct i2c_client *client, const struct i2c_device_id *i
 		atomic_set(&flashlight_enable, 0);
 		atomic_set(&message_enable, 0);
 		atomic_set(&email_enable, 0);
+		atomic_set(&custom_w_enable, 0);
+		atomic_set(&custom_z_enable, 0);
+		atomic_set(&custom_v_enable, 0);
+		atomic_set(&custom_s_enable, 0);
 #endif
 
 #ifdef GSL_PROXIMITY_SENSOR
@@ -2521,6 +2621,10 @@ static int gsl_ts_probe(struct i2c_client *client, const struct i2c_device_id *i
 	set_bit(KEY_GESTURE_SLIDE_C, gesture_bmp);
 	set_bit(KEY_GESTURE_SLIDE_M, gesture_bmp);
 	set_bit(KEY_GESTURE_SLIDE_E, gesture_bmp);
+	set_bit(KEY_GESTURE_SLIDE_W, gesture_bmp);
+	set_bit(KEY_GESTURE_SLIDE_Z, gesture_bmp);
+	set_bit(KEY_GESTURE_SLIDE_V, gesture_bmp);
+	set_bit(KEY_GESTURE_SLIDE_S, gesture_bmp);
 	wake_lock_init(&ddata->gesture_wake_lock,
 		WAKE_LOCK_SUSPEND, "gsl_ts_gesture");
 #endif
