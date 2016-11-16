@@ -420,7 +420,6 @@ static ssize_t rmidev_write(struct file *filp, const char __user *buf,
 		kfree(tmpbuf);
 		return -EFAULT;
 	}
-
 	mutex_lock(&(dev_data->file_mutex));
 
 	retval = synaptics_rmi4_reg_write(rmidev->rmi4_data,
